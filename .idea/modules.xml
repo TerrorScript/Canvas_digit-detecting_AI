@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/DrawingNumberDetector.iml" filepath="$PROJECT_DIR$/.idea/DrawingNumberDetector.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Canvas digit-detecting AI.iml" filepath="$PROJECT_DIR$/.idea/Canvas digit-detecting AI.iml" />
     </modules>
   </component>
 </project>

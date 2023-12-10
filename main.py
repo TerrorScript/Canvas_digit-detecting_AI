@@ -1,9 +1,141 @@
 import time
+from datetime import datetime
+
 import dearpygui.dearpygui as dpg
 import keras
 import numpy as np
-from PIL import Image as im
+from PIL import Image as im, Image, ImageDraw
 from keras.models import model_from_json
+
+
+def open_drawing_window(filetype, title, size_h_w: tuple = None):
+    """
+    Based off of https://www.reddit.com/r/DearPyGui/comments/rpj1b0/dpg_touchscreen_drawing_with_pen_doesnt_work/
+
+    After some analysis:
+    1. Define list tracking all drawn points/lines
+    2. Create drawlist to display all of those points/lines
+    3. Bind to mouse events
+      3.1. Update tracking list
+      3.2. Update drawlist
+    4. Process for network
+      4.1. Create blank image (using Image.new)
+      4.2. Create draw object (using ImageDraw.Draw) to modify blank image directly
+      4.3. Loop over points/lines and apply operations to blank image using draw object
+      4.4. Process now-modified image
+      4.5. Feed now-processed image into network
+    """
+    drawbox_width = size_h_w
+    drawbox_height = size_h_w
+
+    points_list = []
+    tmp_points_list = []
+
+    with dpg.handler_registry(show=True, tag="__demo_mouse_handler") as draw_mouse_handler:
+        m_wheel = dpg.add_mouse_wheel_handler()
+        m_click = dpg.add_mouse_click_handler(button=dpg.mvMouseButton_Left)
+        m_double_click = dpg.add_mouse_double_click_handler(button=dpg.mvMouseButton_Left)
+        m_release = dpg.add_mouse_release_handler(button=dpg.mvMouseButton_Left)
+        m_drag = dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left, threshold=0.0000001)
+        m_down = dpg.add_mouse_down_handler(button=dpg.mvMouseButton_Left)
+        m_move = dpg.add_mouse_move_handler()
+
+    def _event_handler(sender, data):
+        event_type = dpg.get_item_info(sender)["type"]
+
+        if event_type == "mvAppItemType::mvMouseReleaseHandler":
+            print("---------")
+            if dpg.is_item_hovered('draw_canvas'):
+                points_list.append(tmp_points_list[:])
+                # print('master list, len', len(points_list), points_list)
+                if dpg.does_item_exist(item="drawn_lines_layer"):
+                    dpg.delete_item(item="drawn_lines_layer")
+                if dpg.does_item_exist(item="drawn_lines_layer_tmp"):
+                    dpg.delete_item(item="drawn_lines_layer_tmp")
+                dpg.add_draw_layer(tag="drawn_lines_layer", parent=canvas)
+                for x in points_list:
+                    # print('sublist, len', len(x), x)
+                    dpg.draw_polyline(points=x,
+                                      parent="drawn_lines_layer",
+                                      closed=False,
+                                      color=(175, 115, 175, 255),
+                                      thickness=2)
+                tmp_points_list.clear()
+
+        elif event_type == "mvAppItemType::mvMouseDownHandler" or event_type == "mvAppItemType::mvMouseDragHandler":
+            if dpg.is_item_hovered('draw_canvas'):
+                cur_mouse_pos = dpg.get_drawing_mouse_pos()
+                tmp_points_list.append(tuple(cur_mouse_pos))
+                if dpg.does_item_exist(item="drawn_lines_layer_tmp"):
+                    dpg.delete_item(item="drawn_lines_layer_tmp")
+                if dpg.does_item_exist(item="drawn_lines_layer_tmp"):
+                    dpg.delete_item(item="drawn_lines_layer_tmp")
+                dpg.add_draw_layer(tag="drawn_lines_layer_tmp", parent=canvas)
+                dpg.draw_polyline(points=tmp_points_list,
+                                  parent="drawn_lines_layer_tmp",
+                                  closed=False,
+                                  color=(175, 115, 175, 255),
+                                  thickness=2)
+
+    with dpg.window(label="Drawing window", no_close=True, modal=True, tag="draw_window"):
+        def erase(sender, data):
+            if sender == 'erase_last':
+                if points_list:
+                    points_list.pop()
+                    if dpg.does_item_exist(item="drawn_lines_layer"):
+                        dpg.delete_item(item="drawn_lines_layer")
+
+                    dpg.add_draw_layer(tag="drawn_lines_layer", parent=canvas)
+                    for x in points_list:
+                        dpg.draw_polyline(points=x,
+                                          parent="drawn_lines_layer",
+                                          closed=False,
+                                          color=(175, 115, 175, 255),
+                                          thickness=2)
+                else:
+                    pass
+
+            elif sender == 'erase_all':
+                points_list.clear()
+                if dpg.does_item_exist(item="drawn_lines_layer"):
+                    dpg.delete_item(item="drawn_lines_layer")
+
+        def save_n_close(sender, data):
+            if sender == "save_close":
+                output_img = Image.new(mode="RGB", size=(drawbox_width, drawbox_height))
+                draw = ImageDraw.Draw(output_img)
+                for y in points_list:
+                    draw.line(y, None, 2, None)
+                output_img.save('{type}_{title}_{date}.png'.format(type=filetype,
+                                                                   title=title,
+                                                                   date=datetime.now().strftime("%Y_%m_%d-%H_%M_%S")))
+
+            dpg.delete_item("draw_window")
+            dpg.configure_item(item=draw_mouse_handler, show=False)
+
+            if __name__ == '__main__':
+                pass
+                # dpg.stop_dearpygui()
+
+        for handler in dpg.get_item_children("__demo_mouse_handler", 1):
+            dpg.set_item_callback(handler, _event_handler)
+
+        with dpg.group(tag='cnt_btns', horizontal=True, parent="draw_window") as buttons:
+            dpg.add_button(label='Erase last', callback=erase, tag='erase_last')
+            dpg.add_spacer(width=30)
+            dpg.add_button(label='Erase all', callback=erase, tag='erase_all')
+            dpg.add_spacer(width=30)
+            dpg.add_button(label='Save and close', callback=save_n_close, tag='save_close')
+            dpg.add_spacer(width=30)
+            dpg.add_button(label='Close without saving', callback=save_n_close, tag='close_no_save')
+
+        dpg.add_text(default_value="Please sign in the box below", parent='draw_window')
+
+        with dpg.child_window(label="canvas_border", tag='canvas_border', width=drawbox_width + 10,
+                              height=drawbox_height + 10, border=True, no_scrollbar=True, parent='draw_window'):
+            with dpg.drawlist(width=drawbox_width, height=drawbox_height,
+                              tag="draw_canvas", parent="canvas_border") as canvas:
+                pass
 
 
 def loadNetwork():
@@ -21,7 +153,7 @@ def loadNetwork():
     return loaded_model
 
 
-def main():
+def main(open_drawing_window):
     loaded_model = loadNetwork()
 
     dpg.create_context()
@@ -151,6 +283,8 @@ def main():
                 dpg.add_text(default_value="Guessed digit: NONE", tag="text_output")
                 dpg.add_text(default_value="Time to calculate: 0.00ms", tag="text_duration")
 
+                dpg.add_button(label="draw popup", callback=lambda: open_drawing_window("png", "title", 300))
+
             # create plot
             with dpg.plot(label="Digit predictions", height=-1, width=-1):
                 # dpg.add_plot_legend()  # Optional
@@ -182,6 +316,11 @@ def main():
                 # limits
                 dpg.set_axis_limits("x_axis", -0.5, 9.5)
                 dpg.set_axis_limits("y_axis", 0, 100)
+
+        # with dpg.drawlist(width=300, height=300):  # or you could use dpg.add_drawlist and set parents manually
+        #     dpg.draw_line((10, 10), (100, 100), color=(255, 0, 0, 255), thickness=1)
+        #     dpg.draw_text((0, 0), "Origin", color=(250, 250, 250, 255), size=15)
+        #     dpg.draw_arrow((50, 70), (100, 65), color=(0, 200, 255), thickness=1, size=10)
     dpg.set_primary_window("Primary Window", True)
 
     dpg.create_viewport(
@@ -199,4 +338,4 @@ def main():
 
 
 if __name__ == '__main__':  # Will not run when file is loaded as import
-    main()
+    main(open_drawing_window)
