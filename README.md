@@ -1,4 +1,4 @@
-# DrawingDigitDetector
+# Canvas digit-detecting AI
 Drawing digit detector application
 
 Preview of app:<br>
