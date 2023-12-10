@@ -22,7 +22,7 @@ def loadNetwork():
 def interface():
     # Variables
     loaded_model = loadNetwork()
-    img = im.new("L", (70, 70), 1)
+    img = im.new("L", (NETWORK_RESOLUTION, NETWORK_RESOLUTION), 1)
     draw = ImageDraw.Draw(img)
     mouse_dxp = mouse_dyp = 0
     drawing = False
@@ -41,8 +41,8 @@ def interface():
 
         max_value = np.max(prediction_values)  # Find maximum value
         print(max_value)
-        print(np.where(prediction_values == max_value)[0])
-        max_index = np.where(prediction_values == max_value)[0]  # Find max_value's index
+        print(np.where(prediction_values == max_value).index(0))
+        max_index = np.where(prediction_values == max_value).index(0)  # Find max_value's index
         dpg.set_value("text_output", f"Guessed digit: {max_index}")  # Each index corresponds to a digit.
         dpg.set_value("text_duration", f"Time to calculate: {round((time.time() - t0) * 1000, 2)}ms")
         dpg.set_value('line_series', [graph_values_x, prediction_values * [100]])
@@ -59,7 +59,7 @@ def interface():
         dpg.set_value('line_series', [graph_values_x, [0] * 10])
 
     def drawLineOnImage(from_pos: (int, int), to_pos: (int, int)):
-        draw.line([from_pos, to_pos], 0, 15)
+        draw.line(xy=[from_pos, to_pos], fill=0, width=int(img.height / 10), joint="curve")
         updateTexture()
 
     def mouseOnCanvas():
@@ -107,11 +107,11 @@ def interface():
     with dpg.window(tag="Primary Window"):
         with dpg.group(horizontal=True):
             with dpg.group(horizontal=False):
+                dpg.add_text("Draw on canvas below.")
+                dpg.add_image(texture_tag="texture_tag", width=250, height=250, tag="canvas_image")
                 with dpg.group(horizontal=True):
-                    dpg.add_text("Draw on canvas below.")
+                    dpg.add_button(label="Run network", callback=runNetwork)
                     dpg.add_button(label="Clear canvas", callback=clearCanvas)
-                dpg.add_image(texture_tag="texture_tag", width=img.width * 2, height=img.height * 2, tag="canvas_image")
-                dpg.add_button(label="Run network", callback=runNetwork)
                 dpg.add_text(default_value="Guessed digit: NONE", tag="text_output")
                 dpg.add_text(default_value="Time to calculate: 0.00ms", tag="text_duration")
 
@@ -160,10 +160,10 @@ def main():
     dpg.create_viewport(
         title='Canvas digit-detecting AI',
         width=600,
-        height=300,
+        height=400,
         # resizable=False,
         min_width=500,
-        min_height=250
+        min_height=400
     )
     dpg.setup_dearpygui()
     dpg.show_viewport()
