@@ -9,20 +9,23 @@ from keras.models import model_from_json
 
 
 def open_drawing_window(filetype, title, size_h_w: tuple = None):
-    # Based off of https://www.reddit.com/r/DearPyGui/comments/rpj1b0/dpg_touchscreen_drawing_with_pen_doesnt_work/
-    # TODO
-    #  After some analysis:
-    #  1. Define list tracking all drawn points/lines
-    #  2. Create drawlist to display all of those points/lines
-    #  3. Bind to mouse events
-    #    3.1. Update tracking list
-    #    3.2. Update drawlist
-    #  4. Process for network
-    #    4.1. Create blank image (using Image.new)
-    #    4.2. Create draw object (using ImageDraw.Draw) to modify blank image directly
-    #    4.3. Loop over points/lines and apply operations to blank image using draw object
-    #    4.4. Process now-modified image
-    #    4.5. Feed now-processed image into network
+    """
+    Based off of https://www.reddit.com/r/DearPyGui/comments/rpj1b0/dpg_touchscreen_drawing_with_pen_doesnt_work/
+
+    After some analysis:
+    1. Define list tracking all drawn points/lines
+    2. Create drawlist to display all of those points/lines
+    3. Bind to mouse events
+      3.1. Update tracking list
+      3.2. Update drawlist
+    4. Process for network
+      4.1. Create blank image (using Image.new)
+      4.2. Create draw object (using ImageDraw.Draw) to modify blank image directly
+      4.3. Loop over points/lines and apply operations to blank image using draw object
+      4.4. Process now-modified image
+      4.5. Feed now-processed image into network
+    """
+    # TODO Refactor code
 
     drawbox_width = size_h_w
     drawbox_height = size_h_w
@@ -138,17 +141,13 @@ def open_drawing_window(filetype, title, size_h_w: tuple = None):
 
 
 def loadNetwork():
-    t0 = time.time()
     # load json and create model
-    with open("model.json", 'r') as json_file:  # with statement automatically closes file afterwards
+    with open("model.json", 'r') as json_file:  # "with" statement automatically closes file afterwards
         loaded_model_json = json_file.read()
     loaded_model = model_from_json(loaded_model_json)
 
-    # load weights into new model
     loaded_model.load_weights("model.h5")
-
     loaded_model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
-    # print(f"loaded network in {time.time() - t0}s")
     return loaded_model
 
 
@@ -158,7 +157,9 @@ def main(open_drawing_window):
     dpg.create_context()
 
     texture_res = 28
+    mouse_xp = mouse_yp = 0
     texture_data = [1, 1, 1, 1] * (texture_res ** 2)
+    drawing = False
 
     graph_values_x = []
     for i in range(0, 10):
@@ -166,19 +167,19 @@ def main(open_drawing_window):
 
     def runNetwork():
         # convert 1D array to 3D array
-        imagedata = np.array(texture_data).reshape(28, 28, 4)
+        reshaped_texture = np.array(texture_data).reshape(28, 28, 4)
 
         # convert 3D array into image and convert from RGBA to greyscale (L)
-        imagedata = im.fromarray(imagedata, "RGBA").convert("L")
+        image_greyscale = im.fromarray(reshaped_texture, "RGBA").convert("L")
 
         # Convert greyscale image back to array of shape (28, 28, 1)
-        imagedata = keras.utils.img_to_array(imagedata)
+        processed_texture = keras.utils.img_to_array(image_greyscale)
 
         # Insert fourth axis at the first position of the vector, resulting in the shape (1, 28, 28, 1)
-        imagedata = np.expand_dims(imagedata, 0)
+        expanded_texture = np.expand_dims(processed_texture, 0)
 
         t0 = time.time()
-        prediction_values = loaded_model.predict(imagedata)  # Returns list of predictions for each digit.
+        prediction_values = loaded_model.predict(expanded_texture)  # Returns list of predictions for each digit.
 
         max_value = np.max(prediction_values)  # Find maximum value
         max_index = np.where(prediction_values == max_value).index(1)  # Find max_value's index
@@ -194,42 +195,19 @@ def main(open_drawing_window):
         nonlocal texture_data
         texture_data = [1, 1, 1, 1] * (28 ** 2)
 
-    # def mouseInRect(drawlist, canvas=None):
-    #     px, py = dpg.get_mouse_pos(local=False)
-    #     for item in drawlist:
-    #         if (drawable := item.contains(px, py, canvas=canvas)) is not None:
-    #             return drawable
-    #     return None
-    #
-    # def mouseClick(x_coord_entry, canvas):
-    #     px, py = dpg.get_mouse_pos(local=False)
-    #     if px < 200:
-    #         return
-    #
-    #     global currentSelection
-    #     global currentPick
-    #     if currentSelection is None:
-    #         if currentPick is not None:
-    #             dpg.delete_item(currentPick)
-    #         currentPick = None
-    #         return
-    #
-    #     selected = dpg.get_item_user_data(currentSelection)
-    #     config = dpg.get_item_configuration(selected)
-    #     pmin = [config['pmin'][0] - 2, config['pmin'][1] - 2]
-    #     pmax = [config['pmax'][0] + 2, config['pmax'][1] + 2]
-    #     dpg.set_value(x_coord_entry, config['pmin'][0])
-    #
-    #     if currentPick is None:
-    #         currentPick = dpg.draw_rectangle(pmin, pmax, thickness=2, parent=canvas, color=[255, 0, 0, 255],
-    #                                          user_data=selected)
-    #
-    #     if dpg.get_item_user_data(currentPick) != selected:
-    #         dpg.configure_item(currentPick, pmin=pmin, pmax=pmax, user_data=selected)
-    #
+    def mouseOnCanvas():
+        return dpg.is_item_hovered('canvas_image')
+
+    def mouseClick(x_coord_entry, canvas):
+        if not mouseOnCanvas():
+            return
+        nonlocal drawing, mouse_xp, mouse_yp
+        drawing = True
+        mouse_xp, mouse_yp = dpg.get_mouse_pos(local=False)
+
     # def mouseMove(drawlist, canvas):
     #     global currentSelection
-    #     if (selected := mouseInRect(drawlist, canvas)) is None:
+    #     if (selected := mouseOnCanvas(drawlist, canvas)) is None:
     #         if currentSelection is not None:
     #             dpg.delete_item(currentSelection)
     #         currentSelection = None
@@ -245,28 +223,45 @@ def main(open_drawing_window):
     #     if dpg.get_item_user_data(currentSelection) != selected:
     #         dpg.configure_item(currentSelection, pmin=pmin, pmax=pmax, user_data=selected)
     #
-    # def mouseDrag():
-    #     global currentPick
-    #     if currentPick is None:
-    #         return
-    #
-    #     px, py = dpg.get_mouse_pos(local=False)
-    #     if px < 200:
-    #         return
-    #
-    #     selected = dpg.get_item_user_data(currentPick)
-    #     config = dpg.get_item_configuration(selected)
-    #     pmin = [px, py]
-    #     w = config['pmax'][0] - config['pmin'][0]
-    #     h = config['pmax'][1] - config['pmin'][1]
-    #     pmax = [px + w, py + h]
-    #     dpg.configure_item(selected, pmin=pmin, pmax=pmax)
-    #     dpg.configure_item(currentPick, pmin=pmin, pmax=pmax)
-    #
-    # with dpg.handler_registry():
-    #     dpg.add_mouse_click_handler(callback=lambda s, d: mouseClick(x_coord_entry, canvas, ))
-    #     dpg.add_mouse_move_handler(callback=lambda s, d: mouseMove(drawlist, canvas, ))
-    #     dpg.add_mouse_drag_handler(callback=lambda s, d: mouseDrag())
+    def mouseDrag():
+        print("received mouse drag")
+        if not drawing:
+            return
+        print("processing mouse drag")
+        # TODO
+        #  1. Convert texture array to PIL image
+        #  2. Retrieve ImageDraw object
+        #  3. Draw line from mouse_xp, mouse_yp to mouse_x, mouse_y
+        #  4. Update texture array
+
+        nonlocal texture_data
+
+        print(texture_data)
+
+        # convert 1D array to 3D array
+        reshaped_texture = np.array(texture_data).reshape(28, 28, 4)
+        print(reshaped_texture)
+
+        # convert 3D array into image and convert from RGBA to greyscale (L)
+        image_greyscale = im.fromarray(reshaped_texture, "RGBA").convert("L")
+
+        draw = ImageDraw.Draw(image_greyscale)
+        draw.line((0, 0) + image_greyscale.size, fill=128)
+        draw.line((0, image_greyscale.size[1], image_greyscale.size[0], 0), fill=128)
+
+        # mouse_xp, mouse_yp
+        mouse_x, mouse_y = dpg.get_mouse_pos(local=False)
+
+        image_rgba = image_greyscale.convert("RGBA")
+        texture_data = keras.utils.img_to_array(image_rgba).flatten().flatten()
+        print(texture_data.shape)
+
+    with dpg.handler_registry():
+        dpg.add_mouse_click_handler(callback=mouseClick)
+        dpg.add_mouse_drag_handler(callback=mouseDrag)
+        # dpg.add_mouse_click_handler(callback=lambda s, d: mouseClick(x_coord_entry, canvas, ))
+        # dpg.add_mouse_move_handler(callback=lambda s, d: mouseMove(drawlist, canvas, ))
+        # dpg.add_mouse_drag_handler(callback=lambda s, d: mouseDrag())
 
     with dpg.texture_registry():  # show=True):
         dpg.add_dynamic_texture(width=28, height=28, default_value=texture_data, tag="texture_tag")
@@ -277,7 +272,7 @@ def main(open_drawing_window):
                 with dpg.group(horizontal=True):
                     dpg.add_text("Draw on canvas below.")
                     dpg.add_button(label="Clear canvas", callback=clearCanvas)
-                dpg.add_image(texture_tag="texture_tag", width=28 * 4, height=28 * 4)
+                dpg.add_image(texture_tag="texture_tag", width=28 * 4, height=28 * 4, tag="canvas_image")
                 dpg.add_button(label="Run network", callback=runNetwork)
                 dpg.add_text(default_value="Guessed digit: NONE", tag="text_output")
                 dpg.add_text(default_value="Time to calculate: 0.00ms", tag="text_duration")
@@ -321,6 +316,7 @@ def main(open_drawing_window):
         #     dpg.draw_text((0, 0), "Origin", color=(250, 250, 250, 255), size=15)
         #     dpg.draw_arrow((50, 70), (100, 65), color=(0, 200, 255), thickness=1, size=10)
     dpg.set_primary_window("Primary Window", True)
+    dpg.show_debug()
 
     dpg.create_viewport(
         title='Canvas digit-detecting AI',
