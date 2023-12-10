@@ -9,22 +9,21 @@ from keras.models import model_from_json
 
 
 def open_drawing_window(filetype, title, size_h_w: tuple = None):
-    """
-    Based off of https://www.reddit.com/r/DearPyGui/comments/rpj1b0/dpg_touchscreen_drawing_with_pen_doesnt_work/
+    # Based off of https://www.reddit.com/r/DearPyGui/comments/rpj1b0/dpg_touchscreen_drawing_with_pen_doesnt_work/
+    # TODO
+    #  After some analysis:
+    #  1. Define list tracking all drawn points/lines
+    #  2. Create drawlist to display all of those points/lines
+    #  3. Bind to mouse events
+    #    3.1. Update tracking list
+    #    3.2. Update drawlist
+    #  4. Process for network
+    #    4.1. Create blank image (using Image.new)
+    #    4.2. Create draw object (using ImageDraw.Draw) to modify blank image directly
+    #    4.3. Loop over points/lines and apply operations to blank image using draw object
+    #    4.4. Process now-modified image
+    #    4.5. Feed now-processed image into network
 
-    After some analysis:
-    1. Define list tracking all drawn points/lines
-    2. Create drawlist to display all of those points/lines
-    3. Bind to mouse events
-      3.1. Update tracking list
-      3.2. Update drawlist
-    4. Process for network
-      4.1. Create blank image (using Image.new)
-      4.2. Create draw object (using ImageDraw.Draw) to modify blank image directly
-      4.3. Loop over points/lines and apply operations to blank image using draw object
-      4.4. Process now-modified image
-      4.5. Feed now-processed image into network
-    """
     drawbox_width = size_h_w
     drawbox_height = size_h_w
 
