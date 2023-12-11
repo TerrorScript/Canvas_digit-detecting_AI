@@ -28,8 +28,9 @@ def loadNetwork():
     return loaded_model
 
 
-def interface():
-    # Variables
+def main():
+    dpg.create_context()
+
     loaded_model = loadNetwork()
     test_images = loadTestImages()
     img = im.new("L", (NETWORK_RESOLUTION, NETWORK_RESOLUTION), 0)
@@ -38,7 +39,6 @@ def interface():
     drawing = False
     graph_values_x = np.arange(10)  # Create list from 0 to 9
 
-    # Functions
     def runNetwork():
         # Convert greyscale image back to array of shape (28, 28, 1)
         processed_texture = np.asarray(img.resize((NETWORK_RESOLUTION, NETWORK_RESOLUTION)))
@@ -47,7 +47,9 @@ def interface():
         expanded_texture = np.expand_dims(processed_texture, 0)
 
         t0 = time.time()
-        prediction_values = loaded_model.predict(expanded_texture)  # Returns list of predictions for each digit.
+
+        # Returns list of predictions for each digit.
+        prediction_values = loaded_model.predict(expanded_texture)
 
         max_value = np.max(prediction_values)  # Find maximum value
         max_index = np.where(prediction_values == max_value)[1][0]  # Find max_value's index
@@ -59,24 +61,25 @@ def interface():
         texture_data = np.asarray(img.convert("RGBA"))
         dpg.set_value("texture_tag", texture_data)
 
-    def clearCanvas():
-        draw.rectangle((0, 0, img.width, img.height), 0)
-        updateTexture()
+    def clearCanvas(redraw=True):
+        if redraw:
+            draw.rectangle((0, 0, img.width, img.height), 0)
+            updateTexture()
         dpg.set_value("text_output", "Guessed digit: NONE")
         dpg.set_value("text_duration", "Time to calculate: 0.00ms")
         dpg.set_value('line_series', [graph_values_x, [0] * 10])
 
     def pickRandomImage():
-        # clearCanvas()
-        test_image_tensor = test_images[int(random() * len(test_images) + 0.5)].reshape(28, 28)
-        print(test_image_tensor.shape)
-        test_image = test_image_tensor.flatten().flatten()
-        img.putdata(test_image)
+        clearCanvas(redraw=False)
+        image_index = int(random() * len(test_images) + 0.5)
+        test_image_tensor = test_images[image_index] * 2  # 2x multiplier so it shows up better
+        test_image_flat = test_image_tensor.flatten().flatten()
+        img.putdata(test_image_flat)
         updateTexture()
 
     def drawLineOnImage(from_pos: (int, int), to_pos: (int, int)):
-        width = img.height / 9
-        width_half = width / 2
+        width = img.height / 8
+        width_half = width / 4
         draw.line(xy=[from_pos, to_pos], fill=1, width=int(width), joint="curve")
         draw.ellipse(xy=[(from_pos[0] - width_half, from_pos[1] - width_half),
                          (from_pos[0] + width_half, from_pos[1] + width_half)], fill=1, width=0)
@@ -125,7 +128,7 @@ def interface():
     with dpg.window(tag="Primary Window"):
         with dpg.group(horizontal=True):
             with dpg.group(horizontal=False):
-                dpg.add_text("Draw on canvas below.")
+                dpg.add_text("Draw a digit on the canvas below.")
                 dpg.add_image(texture_tag="texture_tag", width=300, height=300, tag="canvas_image")
                 with dpg.group(horizontal=True):
                     dpg.add_button(label="Run network", callback=runNetwork)
@@ -136,24 +139,11 @@ def interface():
 
             # create plot
             with dpg.plot(label="Digit predictions", height=-1, width=-1):
-                # dpg.add_plot_legend()  # Optional
-
                 dpg.add_plot_axis(dpg.mvXAxis, label="Digits", tag="x_axis", no_gridlines=True, no_tick_marks=True)
                 dpg.set_axis_ticks("x_axis", (
-                    ("0", 0),
-                    ("1", 1),
-                    ("2", 2),
-                    ("3", 3),
-                    ("4", 4),
-                    ("5", 5),
-                    ("6", 6),
-                    ("7", 7),
-                    ("8", 8),
-                    ("9", 9)
-                ))
+                ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8), ("9", 9)))
 
                 dpg.add_plot_axis(dpg.mvYAxis, label="Predictions(%)", tag="y_axis")
-
                 dpg.add_bar_series(
                     graph_values_x.tolist(),
                     [0] * 10,
@@ -165,16 +155,8 @@ def interface():
                 # limits
                 dpg.set_axis_limits("x_axis", -0.5, 9.5)
                 dpg.set_axis_limits("y_axis", 0, 100)
-
     updateTexture()
     dpg.set_primary_window("Primary Window", True)
-    # dpg.show_debug()
-
-
-def main():
-    dpg.create_context()
-
-    interface()
 
     dpg.create_viewport(
         title='Canvas digit-detecting AI',
