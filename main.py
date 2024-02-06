@@ -1,3 +1,4 @@
+import os
 import time
 from random import random
 
@@ -49,12 +50,13 @@ def main():
         t0 = time.time()
 
         # Returns list of predictions for each digit.
-        prediction_values = loaded_model.predict(expanded_texture)
+        prediction_values = loaded_model(expanded_texture) # loaded_model.predict(expanded_texture)
+        print(time.time() - t0)
 
         max_value = np.max(prediction_values)  # Find maximum value
         max_index = np.where(prediction_values == max_value)[1][0]  # Find max_value's index
-        dpg.set_value("text_output", f"Guessed digit: {max_index}")  # Each index corresponds to a digit.
-        dpg.set_value("text_duration", f"Time to calculate: {round((time.time() - t0) * 1000, 2)}ms")
+        dpg.set_value("text_output", f"Geraden cijfer: {max_index}")  # Each index corresponds to a digit.
+        dpg.set_value("text_duration", f"Berekentijd: {round((time.time() - t0) * 1000, 2)}ms")
         dpg.set_value('line_series', [graph_values_x, prediction_values * [100]])
 
     def updateTexture():
@@ -65,14 +67,14 @@ def main():
         if redraw:
             draw.rectangle((0, 0, img.width, img.height), 0)
             updateTexture()
-        dpg.set_value("text_output", "Guessed digit: NONE")
-        dpg.set_value("text_duration", "Time to calculate: 0.00ms")
+        dpg.set_value("text_output", "Geraden cijfer: nog niets")
+        dpg.set_value("text_duration", "Berekentijd: 0.00ms")
         dpg.set_value('line_series', [graph_values_x, [0] * 10])
 
     def pickRandomImage():
         clearCanvas(redraw=False)
         image_index = int(random() * len(test_images) + 0.5)
-        test_image_tensor = test_images[image_index] * 2  # 2x multiplier so it shows up better
+        test_image_tensor = test_images[image_index] ** 0.5 * 2  # 2x multiplier so it shows up better
         test_image_flat = test_image_tensor.flatten().flatten()
         img.putdata(test_image_flat)
         updateTexture()
@@ -97,7 +99,7 @@ def main():
         mouse_x, mouse_y = dpg.get_mouse_pos(local=False)
         return (mouse_x - item_pos[0]) * scale_x, (mouse_y - item_pos[1]) * scale_y
 
-    def mouseClick(x_coord_entry, canvas):
+    def mouseClick():
         nonlocal drawing
         if not mouseOnCanvas():
             drawing = False
@@ -106,6 +108,13 @@ def main():
 
         nonlocal mouse_dxp, mouse_dyp
         mouse_dxp, mouse_dyp = getMouseCanvasPos()
+
+    def mouseRelease():
+        nonlocal drawing
+        if not drawing:
+            return
+        drawing = False
+        runNetwork()
 
     def mouseDrag():
         if not drawing:
@@ -116,34 +125,58 @@ def main():
         drawLineOnImage((mouse_dxp, mouse_dyp), (mouse_dx, mouse_dy))
 
         mouse_dxp, mouse_dyp = mouse_dx, mouse_dy
+        runNetwork()
 
     with dpg.handler_registry():
         dpg.add_mouse_click_handler(callback=mouseClick)
+        dpg.add_mouse_release_handler(callback=mouseRelease)
         dpg.add_mouse_drag_handler(callback=mouseDrag)
+
+    def resized():
+        width = dpg.get_viewport_width()
+        height = dpg.get_viewport_height()
+        print(f"resized width: {width} height: {height}")
+
+    with dpg.item_handler_registry(tag="#resize_handler"):
+        dpg.add_item_resize_handler(callback=resized)
 
     with dpg.texture_registry():  # show=True):
         dpg.add_dynamic_texture(width=img.width, height=img.height,
                                 default_value=[1, 1, 1, 1] * (img.width * img.height), tag="texture_tag")
 
+    # TODO
+    #  - Meer contrast tussen interface elementen en achtergrond
+    #  - 3D effect knoppen?
+    #  - Het geraadde getal rechts van het canvas tonen, met dezelfde grootte als het canvas.
+    #  - Veel grotere letters
+    #  - Grafieken en uitvoertijd zijn details, hou hun klein
+    #  - Maak het aantrekkelijk
+
+    with dpg.theme() as global_theme:
+        with dpg.theme_component(dpg.mvButton):
+            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 5, category=dpg.mvThemeCat_Core)
+            dpg.add_theme_style(target=dpg.mvStyleVar_FramePadding, x=7, y=13)
+    dpg.bind_theme(global_theme)
+
     with dpg.window(tag="Primary Window"):
         with dpg.group(horizontal=True):
-            with dpg.group(horizontal=False):
-                dpg.add_text("Draw a digit on the canvas below.")
-                dpg.add_image(texture_tag="texture_tag", width=300, height=300, tag="canvas_image")
-                with dpg.group(horizontal=True):
-                    dpg.add_button(label="Run network", callback=runNetwork)
-                    dpg.add_button(label="Clear canvas", callback=clearCanvas)
-                    dpg.add_button(label="Random digit", callback=pickRandomImage)
-                dpg.add_text(default_value="Guessed digit: NONE", tag="text_output")
-                dpg.add_text(default_value="Time to calculate: 0.00ms", tag="text_duration")
+            with dpg.group(horizontal=False, width=325, tag="width0"):
+                dpg.add_text("Teken op het onderstaande canvas.")
+                dpg.add_image(texture_tag="texture_tag", width=325, height=325, tag="canvas_image")
+                # with dpg.group(horizontal=True):
+                # dpg.add_button(label="Start / test", callback=runNetwork, width=-1)
+                dpg.add_button(label="Leeg canvas", callback=clearCanvas, width=-1)
+                dpg.add_button(label="Willekeurig cijfer", callback=pickRandomImage, width=-1)
+                dpg.add_text(default_value="Geraden cijfer: nog niets", tag="text_output")
+                dpg.add_text(default_value="Berekentijd: 0.00ms", tag="text_duration")
 
             # create plot
-            with dpg.plot(label="Digit predictions", height=-1, width=-1):
-                dpg.add_plot_axis(dpg.mvXAxis, label="Digits", tag="x_axis", no_gridlines=True, no_tick_marks=True)
+            with dpg.plot(label="Cijfer voorspellingen", height=-1, width=-1):
+                dpg.add_plot_axis(dpg.mvXAxis, label="Cijfers", tag="x_axis", no_gridlines=True, no_tick_marks=True)
                 dpg.set_axis_ticks("x_axis", (
-                ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8), ("9", 9)))
+                    ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8), ("9", 9)))
 
-                dpg.add_plot_axis(dpg.mvYAxis, label="Predictions(%)", tag="y_axis")
+                dpg.add_plot_axis(dpg.mvYAxis, label="Voorspellingen(%)", tag="y_axis")
                 dpg.add_bar_series(
                     graph_values_x.tolist(),
                     [0] * 10,
@@ -158,13 +191,17 @@ def main():
     updateTexture()
     dpg.set_primary_window("Primary Window", True)
 
+    dpg.set_viewport_resize_callback(resized)
     dpg.create_viewport(
-        title='Canvas digit-detecting AI',
-        width=600,
-        height=450,
+        title='Artificial Computer Neural Example (ACNE)',
+        width=650,
+        height=550,
         # resizable=False,
-        min_width=500,
-        min_height=450
+        min_width=600,
+        min_height=550,
+
+        small_icon="CustomIcon.ico",
+        large_icon="CustomIcon.ico"
     )
     dpg.setup_dearpygui()
     dpg.show_viewport()
