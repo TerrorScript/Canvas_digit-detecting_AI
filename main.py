@@ -1,4 +1,3 @@
-import os
 import time
 from random import random
 
@@ -34,15 +33,20 @@ def main():
 
     loaded_model = loadNetwork()
     test_images = loadTestImages()
-    img = im.new("L", (NETWORK_RESOLUTION, NETWORK_RESOLUTION), 0)
+    img = im.new("L", (NETWORK_RESOLUTION, NETWORK_RESOLUTION), 1)  # 0)
     draw = ImageDraw.Draw(img)
     mouse_dxp = mouse_dyp = 0
     drawing = False
     graph_values_x = np.arange(10)  # Create list from 0 to 9
+    expertMode = False
 
     def runNetwork():
         # Convert greyscale image back to array of shape (28, 28, 1)
-        processed_texture = np.asarray(img.resize((NETWORK_RESOLUTION, NETWORK_RESOLUTION)))
+        processed_texture_inverted = np.asarray(img.resize((NETWORK_RESOLUTION, NETWORK_RESOLUTION)))
+
+        # The original texture is actually inverted for UX reasons; so that the image looks more similar to an input field.
+        # However, the network has been trained with black as background so the colors have to be swapped.
+        processed_texture = 1 - processed_texture_inverted
 
         # Insert fourth axis at the first position of the vector, resulting in the shape (1, 28, 28, 1)
         expanded_texture = np.expand_dims(processed_texture, 0)
@@ -50,12 +54,13 @@ def main():
         t0 = time.time()
 
         # Returns list of predictions for each digit.
-        prediction_values = loaded_model(expanded_texture) # loaded_model.predict(expanded_texture)
-        print(time.time() - t0)
+        prediction_values = loaded_model(expanded_texture)  # loaded_model.predict(expanded_texture)
+        # print(time.time() - t0)
 
         max_value = np.max(prediction_values)  # Find maximum value
         max_index = np.where(prediction_values == max_value)[1][0]  # Find max_value's index
-        dpg.set_value("text_output", f"Geraden cijfer: {max_index}")  # Each index corresponds to a digit.
+        # dpg.set_value("text_output", f"Geraden cijfer: {max_index}")  # Each index corresponds to a digit.
+        dpg.set_value("text_output_large", max_index)
         dpg.set_value("text_duration", f"Berekentijd: {round((time.time() - t0) * 1000, 2)}ms")
         dpg.set_value('line_series', [graph_values_x, prediction_values * [100]])
 
@@ -65,9 +70,10 @@ def main():
 
     def clearCanvas(redraw=True):
         if redraw:
-            draw.rectangle((0, 0, img.width, img.height), 0)
+            draw.rectangle((0, 0, img.width, img.height), 1)
             updateTexture()
-        dpg.set_value("text_output", "Geraden cijfer: nog niets")
+        # dpg.set_value("text_output", "Geraden cijfer: nog niets")
+        dpg.set_value("text_output_large", "?")
         dpg.set_value("text_duration", "Berekentijd: 0.00ms")
         dpg.set_value('line_series', [graph_values_x, [0] * 10])
 
@@ -76,15 +82,27 @@ def main():
         image_index = int(random() * len(test_images) + 0.5)
         test_image_tensor = test_images[image_index] ** 0.5 * 2  # 2x multiplier so it shows up better
         test_image_flat = test_image_tensor.flatten().flatten()
-        img.putdata(test_image_flat)
+
+        # The image is inverted to make the black background white and the actual digit black.
+        # This is to match the decision to have white as background so that the canvas looks more like an input field.
+
+        test_image_flat_inverted = 1 - test_image_flat
+        img.putdata(test_image_flat_inverted)
+
         updateTexture()
+        runNetwork()
+
+    def toggleExpertMode():
+        nonlocal expertMode
+        expertMode = not expertMode
+        resized()
 
     def drawLineOnImage(from_pos: (int, int), to_pos: (int, int)):
-        width = img.height / 8
+        width = img.height / 12  # 8
         width_half = width / 4
-        draw.line(xy=[from_pos, to_pos], fill=1, width=int(width), joint="curve")
+        draw.line(xy=[from_pos, to_pos], fill=0, width=int(width), joint="curve")
         draw.ellipse(xy=[(from_pos[0] - width_half, from_pos[1] - width_half),
-                         (from_pos[0] + width_half, from_pos[1] + width_half)], fill=1, width=0)
+                         (from_pos[0] + width_half, from_pos[1] + width_half)], fill=0, width=0)
         updateTexture()
 
     def mouseOnCanvas():
@@ -132,10 +150,23 @@ def main():
         dpg.add_mouse_release_handler(callback=mouseRelease)
         dpg.add_mouse_drag_handler(callback=mouseDrag)
 
+    dynamicFont = None
     def resized():
         width = dpg.get_viewport_width()
         height = dpg.get_viewport_height()
-        print(f"resized width: {width} height: {height}")
+        # print(f"resized width: {width} height: {height}")
+        if expertMode:
+            dpg.show_item("Prediction Graph")
+        else:
+            dpg.hide_item("Prediction Graph")
+        size = min(width / 3, height / 2) if expertMode else min(width / 2, height / 2)
+        dpg.configure_item("width0", width=size) # , )#*height=height)
+        dpg.configure_item("width1", width=size) # , )#*height=height)
+        dpg.configure_item("canvas_image", height=size)
+        # dpg.configure_item("text_output_large", font=("Arial", size))
+
+        # nonlocal dynamicFont
+        # dynamicFont = dpg.add_font("NotoSerifCJKjp-Medium.otf", int(size))
 
     with dpg.item_handler_registry(tag="#resize_handler"):
         dpg.add_item_resize_handler(callback=resized)
@@ -151,6 +182,12 @@ def main():
     #  - Veel grotere letters
     #  - Grafieken en uitvoertijd zijn details, hou hun klein
     #  - Maak het aantrekkelijk
+    #  - Canvas margin where the outer edges are extra and not considered.
+    #  - "Expert mode": knop die de graaf toont.
+
+    with dpg.font_registry():
+        # first argument ids the path to the .ttf or .otf file
+        dynamicFont = dpg.add_font("NotoSerifCJKjp-Medium.otf", 400)
 
     with dpg.theme() as global_theme:
         with dpg.theme_component(dpg.mvButton):
@@ -161,17 +198,22 @@ def main():
     with dpg.window(tag="Primary Window"):
         with dpg.group(horizontal=True):
             with dpg.group(horizontal=False, width=325, tag="width0"):
-                dpg.add_text("Teken op het onderstaande canvas.")
+                dpg.add_text("Teken een cijfer op het onderstaande canvas.")
                 dpg.add_image(texture_tag="texture_tag", width=325, height=325, tag="canvas_image")
                 # with dpg.group(horizontal=True):
                 # dpg.add_button(label="Start / test", callback=runNetwork, width=-1)
                 dpg.add_button(label="Leeg canvas", callback=clearCanvas, width=-1)
                 dpg.add_button(label="Willekeurig cijfer", callback=pickRandomImage, width=-1)
-                dpg.add_text(default_value="Geraden cijfer: nog niets", tag="text_output")
+                dpg.add_button(label="Expert modus", callback=toggleExpertMode, width=-1)
+                # dpg.add_text(default_value="Geraden cijfer: nog niets", tag="text_output")
                 dpg.add_text(default_value="Berekentijd: 0.00ms", tag="text_duration")
 
+            with dpg.group(horizontal=False, width=325, tag="width1"):
+                dpg.add_text(default_value="?", tag="text_output_large")
+                dpg.bind_item_font("text_output_large", dynamicFont)
+
             # create plot
-            with dpg.plot(label="Cijfer voorspellingen", height=-1, width=-1):
+            with dpg.plot(label="Cijfer voorspellingen", height=-1, width=-1, tag="Prediction Graph"):
                 dpg.add_plot_axis(dpg.mvXAxis, label="Cijfers", tag="x_axis", no_gridlines=True, no_tick_marks=True)
                 dpg.set_axis_ticks("x_axis", (
                     ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8), ("9", 9)))
