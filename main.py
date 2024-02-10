@@ -178,9 +178,7 @@ def main():
     # TODO
     #  - Meer contrast tussen interface elementen en achtergrond
     #  - 3D effect knoppen?
-    #  - Het geraadde getal rechts van het canvas tonen, met dezelfde grootte als het canvas.
     #  - Veel grotere letters
-    #  - Grafieken en uitvoertijd zijn details, hou hun klein
     #  - Maak het aantrekkelijk
     #  - Canvas margin where the outer edges are extra and not considered.
     #  - "Expert mode": knop die de graaf toont.
