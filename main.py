@@ -78,6 +78,7 @@ def main():
         test_image_flat = test_image_tensor.flatten().flatten()
         img.putdata(test_image_flat)
         updateTexture()
+        runNetwork()
 
     def drawLineOnImage(from_pos: (int, int), to_pos: (int, int)):
         width = img.height / 8
