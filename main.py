@@ -62,6 +62,7 @@ def main():
         # dpg.set_value("text_output", f"Geraden cijfer: {max_index}")  # Each index corresponds to a digit.
         dpg.set_value("text_output_large", max_index)
         dpg.set_value("text_duration", f"Berekentijd: {round((time.time() - t0) * 1000, 2)}ms")
+        dpg.set_value("text_highest_percent", f"Hoogste percentage: {round(max_value * 100, 1)}%")
         dpg.set_value('line_series', [graph_values_x, prediction_values * [100]])
 
     def updateTexture():
@@ -75,6 +76,7 @@ def main():
         # dpg.set_value("text_output", "Geraden cijfer: nog niets")
         dpg.set_value("text_output_large", "?")
         dpg.set_value("text_duration", "Berekentijd: 0.00ms")
+        dpg.set_value("text_highest_percent", "Hoogste percentage: 0.0%")
         dpg.set_value('line_series', [graph_values_x, [0] * 10])
 
     def pickRandomImage():
@@ -151,17 +153,23 @@ def main():
         dpg.add_mouse_drag_handler(callback=mouseDrag)
 
     dynamicFont = None
+
     def resized():
         width = dpg.get_viewport_width()
         height = dpg.get_viewport_height()
         # print(f"resized width: {width} height: {height}")
         if expertMode:
             dpg.show_item("Prediction Graph")
+            dpg.show_item("text_duration")
+            dpg.show_item("text_highest_percent")
         else:
             dpg.hide_item("Prediction Graph")
-        size = min(width / 3, height / 2) if expertMode else min(width / 2, height / 2)
-        dpg.configure_item("width0", width=size) # , )#*height=height)
-        dpg.configure_item("width1", width=size) # , )#*height=height)
+            dpg.hide_item("text_duration")
+            dpg.hide_item("text_highest_percent")
+        # size = min(width / 3, height / 2) if expertMode else min(width / 2, height / 2)
+        size = min(width / 2, height / 2)
+        dpg.configure_item("width0", width=size)  # , )#*height=height)
+        dpg.configure_item("width1", width=size)  # , )#*height=height)
         dpg.configure_item("canvas_image", height=size)
         # dpg.configure_item("text_output_large", font=("Arial", size))
 
@@ -181,7 +189,6 @@ def main():
     #  - Veel grotere letters
     #  - Maak het aantrekkelijk
     #  - Canvas margin where the outer edges are extra and not considered.
-    #  - "Expert mode": knop die de graaf toont.
 
     with dpg.font_registry():
         # first argument ids the path to the .ttf or .otf file
@@ -205,6 +212,7 @@ def main():
                 dpg.add_button(label="Expert modus", callback=toggleExpertMode, width=-1)
                 # dpg.add_text(default_value="Geraden cijfer: nog niets", tag="text_output")
                 dpg.add_text(default_value="Berekentijd: 0.00ms", tag="text_duration")
+                dpg.add_text(default_value="Hoogste percentage: 0.0%", tag="text_highest_percent")
 
             with dpg.group(horizontal=False, width=325, tag="width1"):
                 dpg.add_text(default_value="?", tag="text_output_large")
@@ -214,7 +222,8 @@ def main():
             with dpg.plot(label="Cijfer voorspellingen", height=-1, width=-1, tag="Prediction Graph"):
                 dpg.add_plot_axis(dpg.mvXAxis, label="Cijfers", tag="x_axis", no_gridlines=True, no_tick_marks=True)
                 dpg.set_axis_ticks("x_axis", (
-                    ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8), ("9", 9)))
+                    ("0", 0), ("1", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6), ("7", 7), ("8", 8),
+                    ("9", 9)))
 
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voorspellingen(%)", tag="y_axis")
                 dpg.add_bar_series(
